@@ -1,0 +1,161 @@
+import os
+import json
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Optional AWS SDK
+try:
+    import boto3  # type: ignore
+    from botocore.exceptions import BotoCoreError, ClientError  # type: ignore
+except Exception:  # boto3 optional for local-only mode
+    boto3 = None  # type: ignore
+    BotoCoreError = Exception  # type: ignore
+    ClientError = Exception  # type: ignore
+
+
+# Load environment variables
+# Try to find .env file in multiple locations
+env_loaded = False
+env_paths = [
+    Path(__file__).parent.parent / '.env',  # ai-server/.env
+    Path.cwd() / '.env',  # Current working directory
+    Path.home() / '.env',  # Home directory (fallback)
+]
+
+for env_path in env_paths:
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path, override=True)
+        env_loaded = True
+        if os.getenv('DEBUG', 'False').lower() == 'true':
+            print(f"[Settings] Loaded .env from: {env_path}")
+        break
+
+if not env_loaded:
+    # Try default load_dotenv() as fallback
+    load_dotenv()
+    if os.getenv('DEBUG', 'False').lower() == 'true':
+        print("[Settings] Attempted to load .env using default method")
+
+# Basic server config
+PORT = int(os.getenv('PORT', 5000))
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
+
+# AWS Config (optional)
+AWS_REGION = os.getenv('AWS_REGION')
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')  # AWS Access Key
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')  # AWS Secret Access Key
+AWS_S3_BUCKET = os.getenv('AWS_S3_BUCKET')  # where raw chat logs are stored
+AWS_DDB_TABLE = os.getenv('AWS_DDB_TABLE')  # DynamoDB table for structured conversations
+
+# Learning Config (optional)
+LEARNING_FROM_AWS = os.getenv('LEARNING_FROM_AWS', 'false').lower() == 'true'
+LEARNING_MAX_ITEMS = int(os.getenv('LEARNING_MAX_ITEMS', '16'))
+LEARNING_S3_PREFIX = os.getenv('LEARNING_S3_PREFIX', 'chat-logs')
+# Auto-reload knowledge base từ AWS định kỳ (giây), 0 để tắt
+LEARNING_AUTO_RELOAD_INTERVAL = int(os.getenv('LEARNING_AUTO_RELOAD_INTERVAL', '300'))  # Mặc định 5 phút
+LEARNING_AUTO_RELOAD_ENABLED = os.getenv('LEARNING_AUTO_RELOAD_ENABLED', 'true').lower() == 'true'
+
+# Tự học chủ động - Tự động phân tích và học từ conversations (không cần feedback)
+LEARNING_AUTO_LEARN_ENABLED = os.getenv('LEARNING_AUTO_LEARN_ENABLED', 'true').lower() == 'true'
+LEARNING_AUTO_LEARN_INTERVAL = int(os.getenv('LEARNING_AUTO_LEARN_INTERVAL', '600'))  # Mặc định 10 phút
+LEARNING_MIN_SCORE_THRESHOLD = float(os.getenv('LEARNING_MIN_SCORE_THRESHOLD', '0.5'))  # Điểm tối thiểu để học (0.0-1.0)
+LEARNING_MAX_AUTO_LEARN_ITEMS = int(os.getenv('LEARNING_MAX_AUTO_LEARN_ITEMS', '10'))  # Số Q&A tối đa học mỗi lần chạy
+
+# KB Matching thresholds
+KB_SIMILARITY_THRESHOLD = float(os.getenv('KB_SIMILARITY_THRESHOLD', '0.8'))
+KB_JACCARD_THRESHOLD = float(os.getenv('KB_JACCARD_THRESHOLD', '0.3'))
+
+# Conversation history length used when calling models
+MAX_HISTORY_MESSAGES = int(os.getenv('MAX_HISTORY_MESSAGES', '20'))
+
+# Google Gemini Config (optional)
+GOOGLE_GEMINI_API_KEY = os.getenv('GOOGLE_GEMINI_API_KEY')
+# Google recommended model endpoint
+GOOGLE_GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+
+
+# Ollama local AI (optional, preferred)
+OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama3.1')
+
+# Response caching
+ENABLE_RESPONSE_CACHE = os.getenv('ENABLE_RESPONSE_CACHE', 'true').lower() == 'true'
+RESPONSE_CACHE_TTL = int(os.getenv('RESPONSE_CACHE_TTL', '3600'))  # 1 giờ
+
+# Conversation memory
+ENABLE_CONVERSATION_MEMORY = os.getenv('ENABLE_CONVERSATION_MEMORY', 'true').lower() == 'true'
+SESSION_TIMEOUT_HOURS = int(os.getenv('SESSION_TIMEOUT_HOURS', '24'))
+
+# Response validation
+ENABLE_RESPONSE_VALIDATION = os.getenv('ENABLE_RESPONSE_VALIDATION', 'true').lower() == 'true'
+
+# API retry config
+API_RETRY_MAX_ATTEMPTS = int(os.getenv('API_RETRY_MAX_ATTEMPTS', '3'))
+API_RETRY_DELAY_SECONDS = float(os.getenv('API_RETRY_DELAY_SECONDS', '1.0'))
+
+# Backend API config
+BACKEND_API_URL = os.getenv('BACKEND_API_URL', 'http://localhost:8080/api')
+BACKEND_API_TOKEN = os.getenv('BACKEND_API_TOKEN', '')  # Optional: JWT token if needed
+
+
+# Initialize AWS clients if configured
+s3_client = None
+ddb_client = None
+if boto3 and AWS_REGION and (AWS_S3_BUCKET or AWS_DDB_TABLE):
+    # Build credentials dict if provided
+    aws_credentials = {}
+    if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+        aws_credentials = {
+            'aws_access_key_id': AWS_ACCESS_KEY_ID,
+            'aws_secret_access_key': AWS_SECRET_ACCESS_KEY
+        }
+    elif DEBUG:
+        print("[Settings] Warning: AWS_REGION and bucket/table configured but AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY missing")
+    
+    try:
+        s3_client = boto3.client('s3', region_name=AWS_REGION, **aws_credentials)
+        if DEBUG:
+            print(f"[Settings] S3 client initialized successfully (region: {AWS_REGION})")
+    except Exception as e:
+        s3_client = None
+        if DEBUG:
+            print(f"[Settings] Failed to initialize S3 client: {e}")
+    try:
+        ddb_client = boto3.client('dynamodb', region_name=AWS_REGION, **aws_credentials)
+        if DEBUG:
+            print(f"[Settings] DynamoDB client initialized successfully (region: {AWS_REGION})")
+    except Exception as e:
+        ddb_client = None
+        if DEBUG:
+            print(f"[Settings] Failed to initialize DynamoDB client: {e}")
+elif DEBUG and boto3:
+    # Debug: Show why AWS is not configured
+    missing = []
+    if not AWS_REGION:
+        missing.append("AWS_REGION")
+    if not AWS_S3_BUCKET and not AWS_DDB_TABLE:
+        missing.append("AWS_S3_BUCKET or AWS_DDB_TABLE")
+    if missing:
+        print(f"[Settings] AWS not configured - missing: {', '.join(missing)}")
+    if AWS_REGION and (AWS_S3_BUCKET or AWS_DDB_TABLE):
+        if not AWS_ACCESS_KEY_ID or not AWS_SECRET_ACCESS_KEY:
+            print("[Settings] AWS_REGION and bucket/table found but credentials missing from .env")
+
+
+def aws_summary() -> str:
+    """Return a concise AWS summary string for logging."""
+    return (
+        "AWS config => boto3:%s region:%s s3:%s ddb:%s | enabled s3:%s ddb:%s | bedrock:%s model:%s"
+        % (
+            bool(boto3),
+            AWS_REGION or "",
+            AWS_S3_BUCKET or "",
+            AWS_DDB_TABLE or "",
+            bool(s3_client and AWS_S3_BUCKET),
+            bool(ddb_client and AWS_DDB_TABLE),
+            False,
+            "",
+        )
+    )
+
+
