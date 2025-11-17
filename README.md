@@ -1,2 +1,3 @@
 # NHD071205project
-My project
+Welcome to my project
+Branch -> choose project to see my project
