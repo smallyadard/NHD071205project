@@ -1,3 +1,6 @@
 # NHD071205project
-Welcome to my project
-Branch -> choose project to see my project
+RPG game
+Yêu cầu: Intellij 2025
+Cách sử dụng: 
+-clone code về máy
+-mở file gamewindow với intellij và trải nghiệm.
