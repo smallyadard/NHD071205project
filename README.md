@@ -1,2 +1,173 @@
-# NHD071205project
-My project
+Hệ thống Quản lý Nhân khẩu
+Dự án phần mềm quản lý thông tin khu dân cư / tổ dân phố, giúp Ban quản lý thực hiện các nghiệp vụ quản lý nhân khẩu, hộ khẩu, và các công tác đoàn thể khác một cách hiệu quả.
+
+Kiến trúc hệ thống
+Dự án bao gồm 3 thành phần chính hoạt động độc lập:
+
+backend: Một API server xây dựng bằng Java Spring Boot để xử lý toàn bộ logic nghiệp vụ và tương tác với cơ sở dữ liệu.
+frontend: Một ứng dụng giao diện người dùng (SPA) xây dựng bằng React & TypeScript để người dùng tương tác.
+ai-server: Một server Python Flask cung cấp chức năng Chatbot AI, tích hợp với các mô hình ngôn ngữ lớn (LLM) như Ollama và Gemini.
+Công nghệ sử dụng
+Backend:
+Ngôn ngữ: Java 17
+Framework: Spring Boot 3
+Cơ sở dữ liệu: PostgreSQL
+Build tool: Maven
+Frontend:
+Framework: React (với TypeScript)
+Build tool: Vite
+Thư viện UI: Material-UI (MUI)
+Quản lý Form: React Hook Form & Zod
+AI Agent Server:
+Framework: Flask (Python 3.11+)
+Chức năng: Chatbot AI Assistant (Ollama & Google Gemini)
+Hướng dẫn cài đặt và chạy dự án
+1. Yêu cầu tiên quyết
+Java JDK 17 hoặc cao hơn.
+Node.js 18 hoặc cao hơn.
+PostgreSQL đã được cài đặt và đang chạy.
+Python 3.11+ (cho AI Agent Server).
+Maven và Git (thường đã có sẵn hoặc tích hợp trong IDE).
+2. Cấu hình môi trường
+a. Backend & Cơ sở dữ liệu
+Tạo cơ sở dữ liệu:
+
+Mở công cụ quản lý PostgreSQL của bạn (ví dụ: psql, pgAdmin).
+Tạo một database mới với tên quan_ly_nhan_khau.
+CREATE DATABASE quan_ly_nhan_khau;
+Lưu ý: Backend được cấu hình mặc định để kết nối với user postgres. Hãy đảm bảo user này tồn tại và có quyền truy cập database quan_ly_nhan_khau.
+Tạo file cấu hình .env cho Backend:
+
+Di chuyển đến thư mục backend/api.
+Tạo một file mới tên là .env.
+Thêm nội dung sau vào file và thay your_password_here bằng mật khẩu của user postgres trong PostgreSQL của bạn.
+# Mật khẩu cho user 'postgres' của PostgreSQL
+DB_PASSWORD=your_password_here
+Quan trọng: Backend được lập trình để tự động khởi tạo schema và nạp dữ liệu mẫu từ các file trong src/main/resources/data/. Bạn không cần chạy bất kỳ file .sql nào thủ công.
+Tích hợp quét QR qua AppSheet + Google Sheets (Polling)
+Chức năng này cho phép bạn quét QR bằng AppSheet. AppSheet ghi dữ liệu vào Google Sheet, còn website (localhost) sẽ tự động "polling" Google Sheets để lấy qr_code, tự nhập vào thanh tìm kiếm của trang Quản lý Nhân khẩu, rồi xóa dòng đó khỏi Sheet.
+
+Tạo Service Account và chia sẻ Google Sheet:
+
+Tạo Service Account trên GCP, tải về file khóa JSON.
+Chia sẻ Google Sheet (Share) cho client_email trong file khóa JSON với quyền Editor.
+Lấy spreadsheetId của Google Sheet:
+
+spreadsheetId là phần nằm giữa URL: https://docs.google.com/spreadsheets/d/{spreadsheetId}/edit.
+Cấu hình biến môi trường trong frontend/.env:
+
+# Băt buộc cho frontend (Vite)
+VITE_SHEETS_SPREADSHEET_ID=YOUR_SPREADSHEET_ID
+VITE_SHEETS_SHEET_NAME=Sheet1
+
+# Cho proxy server cục bộ (Node Express)
+SHEETS_PROXY_PORT=5175
+
+# CHỌN 1 TRONG 2 CÁCH CUNG CẤP CREDENTIALS CHO PROXY (KHÔNG LỘ RA TRÌNH DUYỆT)
+# Cách A: Trỏ tới file JSON trên máy (không commit file này lên git)
+GOOGLE_APPLICATION_CREDENTIALS=D:\path\to\service-account.json
+
+# Cách B: Dán nội dung JSON ở dạng base64 (không cần lưu file)
+# GOOGLE_CREDENTIALS_BASE64=BASE64_OF_YOUR_JSON
+Ghi chú bảo mật:
+
+Không commit file khóa bí mật vào repository.
+frontend/.gitignore đã được cấu hình để bỏ qua các file khóa thông dụng. Nếu lỡ commit, hãy xóa khỏi lịch sử git.
+Cài dependencies và chạy proxy + frontend:
+
+# Trong thư mục frontend (lần đầu nếu chưa cài)
+npm install
+
+# Chạy proxy Google Sheets (đọc .env tự động)
+npm run sheets-proxy
+
+# Mở một terminal khác trong frontend và chạy ứng dụng
+npm run dev
+Sử dụng:
+
+Vào trang Quản lý Nhân khẩu.
+Nhấn biểu tượng QR trong ô tìm kiếm (tooltip: "Quét từ AppSheet").
+Mở AppSheet để quét QR. Trong vài giây, qr_code sẽ tự nhập vào ô tìm kiếm và dòng tương ứng trong Google Sheet sẽ bị xóa để dọn hộp thư.
+b. AI Server
+Tạo file cấu hình .env cho AI Server:
+Di chuyển đến thư mục ai-server.
+Tạo một file mới tên là .env.
+Sao chép nội dung dưới đây vào file. Cấu hình tối thiểu để chạy local đã được cung cấp.
+# Cấu hình server
+PORT=5000
+DEBUG=True
+
+# Cấu hình cho Ollama (chạy AI cục bộ)
+# Mặc định, không cần thay đổi nếu bạn cài Ollama trên máy
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.1
+
+# (Tùy chọn) Cấu hình Google Gemini để dự phòng khi Ollama lỗi
+# GOOGLE_GEMINI_API_KEY=your_google_gemini_api_key
+
+# (Tùy chọn) Cấu hình lưu trữ log chat trên AWS
+# AWS_REGION=us-east-1
+# AWS_S3_BUCKET=your-s3-bucket-name
+# AWS_DDB_TABLE=your-dynamodb-table-name
+Lưu ý: GOOGLE_GEMINI_API_KEY là tùy chọn. Nếu được cung cấp, hệ thống sẽ tự động dùng Gemini khi không thể kết nối với Ollama.
+c. Frontend
+Tạo file cấu hình .env cho Frontend:
+Di chuyển đến thư mục frontend.
+Tạo một file mới tên là .env.
+Thêm nội dung sau để khai báo địa chỉ của AI Server:
+VITE_AI_SERVER_URL=http://localhost:5000
+3. Cài đặt và Chạy
+Bạn cần mở 3 cửa sổ terminal riêng biệt, mỗi cửa sổ cho một thành phần của hệ thống.
+
+Terminal 1: Chạy Backend
+# Di chuyển đến thư mục backend
+cd backend/api
+
+# Chạy ứng dụng Spring Boot
+./mvnw spring-boot:run
+Backend sẽ khởi động và chạy tại http://localhost:8080.
+
+Terminal 2: Chạy Frontend
+# Di chuyển đến thư mục frontend
+cd frontend
+
+# Cài đặt các thư viện cần thiết
+npm install
+npm install @mui/lab
+
+# Khởi động server phát triển
+npm run dev
+Frontend sẽ khởi động và chạy tại http://localhost:5173. Mở địa chỉ này trên trình duyệt để sử dụng.
+
+Terminal 3: Chạy AI Server
+# Di chuyển đến thư mục ai-server
+cd ai-server
+
+# Tạo và kích hoạt môi trường ảo Python
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS/Linux
+source venv/bin/activate
+
+# Cài đặt các thư viện Python
+pip install -r requirements.txt
+
+# Cài đặt Ollama và tải model (nếu chưa có)
+# Truy cập https://ollama.com/ để cài đặt, sau đó chạy lệnh:
+ollama pull llama3.1
+
+# Khởi động AI server
+python main.py
+AI Server sẽ khởi động và chạy tại http://localhost:5000.
+
+4. Truy cập ứng dụng
+Mở trình duyệt và truy cập http://localhost:5173. Chatbot AI sẽ xuất hiện ở góc dưới bên phải màn hình.
+
+Các chức năng chính
+Quản lý thông tin Hộ khẩu (Thêm, Sửa, Xóa, Tách hộ).
+Quản lý thông tin Nhân khẩu.
+Quản lý các khoản thu phí, đóng góp.
+Thống kê, báo cáo.
+Phân quyền người dùng (Tổ trưởng/Phó, Kế toán).
+AI Chatbot Assistant - Trợ giúp người dùng tìm hiểu về hệ thống.
