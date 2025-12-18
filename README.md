@@ -1,3 +1,4 @@
+
 Hệ thống Quản lý Nhân khẩu
 Dự án phần mềm quản lý thông tin khu dân cư / tổ dân phố, giúp Ban quản lý thực hiện các nghiệp vụ quản lý nhân khẩu, hộ khẩu, và các công tác đoàn thể khác một cách hiệu quả.
 
